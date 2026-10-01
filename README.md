@@ -6,6 +6,10 @@
 
 A toast library for React Native with a queue, pluggable transitions, slots and strict typing. No native code, no runtime dependencies, no animation library required.
 
+<p align="center">
+  <img src="docs/demo.gif" width="280" alt="White toasts with a colored icon badge spring in at the top one after another: payment sent, storage almost full, sync failed; tapping Undo on the first queues a payment cancelled toast" />
+</p>
+
 ## Quick path
 
 1. Install:
@@ -105,13 +109,34 @@ const id = toast.show({
 
 `toast.update(id, patch)` and the `toast.promise` messages accept the same options, except `id`.
 
+### Actions
+
+An `action` renders a button on the right. Pressing it runs `onPress`, then dismisses the toast.
+
+```tsx
+toast.show({
+  title: 'Message deleted',
+  description: 'It will be removed in 5 seconds.',
+  duration: 5000,
+  action: { label: 'Undo', onPress: restoreMessage }
+})
+```
+
+<img src="docs/action.png" width="420" alt="Dark default toast reading Message deleted, It will be removed in 5 seconds, with a bold Undo button on the right" />
+
+### Promises
+
+`toast.promise` shows a sticky loading toast and replaces it in place when the promise settles.
+
 ```tsx
 toast.promise(save(), {
   loading: 'Saving...',
-  success: (value) => ({ title: 'Saved', description: `Record ${value.id}` }),
+  success: (value) => ({ title: 'Saved', description: `Record ${value.id}`, variant: 'success' }),
   error: (error) => `Failed: ${String(error)}`
 })
 ```
+
+<img src="docs/promise.gif" width="280" alt="A Saving... toast appears after pressing Save and turns into a green Saved, Record 42 toast" />
 
 ### Using ids
 
@@ -129,21 +154,47 @@ Pass your own `id` to avoid duplicates. While a toast with that id is live, show
 toast.show({ id: 'offline', title: 'No connection', variant: 'error' })
 ```
 
-See [`examples/toast-ids.tsx`](examples/toast-ids.tsx).
+Report progress by updating the same toast:
+
+```tsx
+// From examples/toast-ids.tsx
+async function uploadWithProgress() {
+  const id = toast.show({ title: 'Uploading 0%', duration: Infinity })
+  for (const progress of [25, 50, 75, 100]) {
+    await wait(500)
+    toast.update(id, { title: `Uploading ${progress}%` })
+  }
+  toast.update(id, { title: 'Upload complete', variant: 'success', duration: 3000 })
+}
+```
+
+<img src="docs/toast-ids-progress.gif" width="280" alt="One toast counts Uploading 0% to 75% in place, then turns green with Upload complete" />
+
+Full example: [examples/toast-ids.tsx](examples/toast-ids.tsx)
 
 ### Using payload
 
 `payload` carries your own data to your slots. The library never reads it. Type it with `createToast<TPayload>()`; the default instance does not accept a payload.
 
 ```tsx
-const { ToastProvider, toast } = createToast<{ avatarUrl: string }>()
+// From examples/custom-payload.tsx
+const { ToastProvider, toast } = createToast<MessagePayload>()
 
-<ToastProvider icon={({ toast }) => <Image source={{ uri: toast.payload?.avatarUrl }} />}>
-
-toast.show({ title: 'Ada sent you a message', payload: { avatarUrl: 'https://example.com/ada.png' } })
+<ToastProvider
+  icon={({ toast: { payload } }) =>
+    payload ? (
+      <Image
+        source={{ uri: payload.avatarUrl }}
+        style={{ width: 32, height: 32, borderRadius: 16 }}
+      />
+    ) : null
+  }
+>
 ```
 
-See [`examples/custom-payload.tsx`](examples/custom-payload.tsx).
+<img src="docs/custom-payload.png" width="420" alt="Dark toast with a round purple avatar on the left, titled Ada Lovelace, Sent you a message" />
+
+Full example: [examples/custom-payload.tsx](examples/custom-payload.tsx)
 
 ### `createToast`
 
@@ -183,9 +234,54 @@ Each slot receives `{ toast, dismiss, pressAction }`. A slot replaces only its o
 
 `containerStyle`, `titleStyle`, `descriptionStyle`, `actionStyle` and `actionLabelStyle` accept any `StyleProp`. Styles merge in precedence order, so a per-call `titleStyle` overrides only the keys it sets. There is no `className` or theme support.
 
+### Styled example
+
+Styles, a per-variant `icon` through `variants`, a `renderAction` slot and a custom transition combine into a branded toast:
+
+```tsx
+// From examples/styled-toast.tsx — styles omitted, see the full file
+<ToastProvider
+  variants={VARIANTS}
+  transition={LiftTransition}
+  containerStyle={styles.container}
+  titleStyle={styles.title}
+  descriptionStyle={styles.description}
+  renderAction={({ toast: { action }, pressAction }) => (
+    <Pressable
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={() => void pressAction()}
+      style={styles.action}
+    >
+      <Text style={styles.actionLabel}>{action?.label}</Text>
+    </Pressable>
+  )}
+>
+```
+
+<img src="docs/styled.png" width="420" alt="White toast with a green left accent and a green check badge, titled Payment sent, $48.00 to Ada Lovelace, with a light purple Undo pill" />
+
+Full example: [examples/styled-toast.tsx](examples/styled-toast.tsx)
+
 ## Variants
 
-Built in: `info` (default), `success`, `warning`, `error`. Add your own with declaration merging, then style it through `variants`:
+Built in: `info` (default), `success`, `warning`, `error`.
+
+```tsx
+toast.show({ title: 'New version available', description: 'Restart the app to update.', variant: 'info' })
+toast.show({ title: 'Profile saved', description: 'Your changes are live.', variant: 'success' })
+toast.show({ title: 'Low battery', description: '15% remaining. Plug in soon.', variant: 'warning' })
+toast.show({ title: 'Upload failed', description: 'The file is larger than 10 MB.', variant: 'error' })
+```
+
+<p>
+  <img src="docs/variant-info.png" width="340" alt="Near-black info toast: New version available, Restart the app to update" />
+  <img src="docs/variant-success.png" width="340" alt="Green success toast: Profile saved, Your changes are live" />
+  <img src="docs/variant-warning.png" width="340" alt="Amber warning toast: Low battery, 15% remaining. Plug in soon" />
+  <img src="docs/variant-error.png" width="340" alt="Red error toast: Upload failed, The file is larger than 10 MB" />
+</p>
+
+Add your own with declaration merging, then style it through `variants`:
 
 ```tsx
 import { ToastProvider, toast } from '@anb98/rn-toast'
@@ -201,7 +297,9 @@ declare module '@anb98/rn-toast' {
 </ToastProvider>
 ```
 
-See [`examples/custom-variant.tsx`](examples/custom-variant.tsx). The augmentation is global to the program, so every instance accepts the new variant.
+<img src="docs/custom-variant.png" width="420" alt="Indigo brand variant toast with the bold title Welcome aboard" />
+
+Full example: [examples/custom-variant.tsx](examples/custom-variant.tsx). The augmentation is global to the program, so every instance accepts the new variant.
 
 ## Transitions
 
@@ -221,8 +319,68 @@ The toast stays mounted until `onExited` is called. If it never is, the slot is 
 | [`animated-transition.tsx`](examples/animated-transition.tsx)    | React Native `Animated` fade and slide.          |
 | [`reanimated-transition.tsx`](examples/reanimated-transition.tsx) | Reanimated with `runOnJS(onExited)`.             |
 | [`swipe-to-dismiss.tsx`](examples/swipe-to-dismiss.tsx)          | `PanResponder` plus `dismiss`.                   |
+| [`styled-toast.tsx`](examples/styled-toast.tsx)                  | Spring in, fade out, with `Animated`.            |
 
 With Reanimated, set `collapsable={false}` on the animated wrapper so Android does not flatten the view.
+
+<p>
+  <img src="docs/animated-transition.gif" width="240" alt="Toast fading and sliding down into place with React Native Animated, then fading out upward" />
+  <img src="docs/reanimated-transition.gif" width="240" alt="Toast fading and sliding in and out with Reanimated" />
+  <img src="docs/swipe-to-dismiss.gif" width="240" alt="Sticky toast swiped off to the right, the next queued toast appears and is swiped off to the left" />
+</p>
+
+**React Native `Animated`**
+
+```tsx
+// From examples/animated-transition.tsx
+useEffect(() => {
+  const exiting = phase === 'exiting'
+  const animation = Animated.timing(progress, {
+    toValue: exiting ? 0 : 1,
+    duration: DURATION,
+    useNativeDriver: true
+  })
+  animation.start(({ finished }) => {
+    if (exiting && finished) onExited()
+  })
+  return () => animation.stop()
+}, [phase, progress, onExited])
+```
+
+Full example: [examples/animated-transition.tsx](examples/animated-transition.tsx)
+
+**Reanimated**
+
+```tsx
+// From examples/reanimated-transition.tsx
+useEffect(() => {
+  if (phase === 'exiting') {
+    progress.value = withTiming(0, { duration: DURATION }, (finished) => {
+      if (finished) runOnJS(onExited)()
+    })
+  } else {
+    progress.value = withTiming(1, { duration: DURATION })
+  }
+}, [phase, progress, onExited])
+```
+
+Full example: [examples/reanimated-transition.tsx](examples/reanimated-transition.tsx)
+
+**Swipe to dismiss**
+
+```tsx
+// From examples/swipe-to-dismiss.tsx
+onPanResponderRelease: (_event, { dx }) => {
+  if (Math.abs(dx) > DISMISS_DISTANCE) {
+    direction.current = dx < 0 ? -1 : 1
+    dismiss()
+  } else {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: false }).start()
+  }
+}
+```
+
+Full example: [examples/swipe-to-dismiss.tsx](examples/swipe-to-dismiss.tsx)
 
 ## Queue strategies
 
